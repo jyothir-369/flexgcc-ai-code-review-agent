@@ -131,26 +131,39 @@ class UnifiedDiffParser:
         file_status: Dict[str, str] = {}  # path -> added|deleted|modified|renamed
 
         current_file: Optional[str] = None
+        current_new_lineno: Optional[int] = None
         is_binary = False
-        rename_from: Optional[str] = None
+
+        def register_file(path: str, status: Optional[str] = None) -> Optional[str]:
+            """Add a validated destination path without exceeding the file limit."""
+            filename = _strip_git_prefix(path.strip().strip('"'))
+            if not filename or filename == "/dev/null" or _is_unsafe_path(filename):
+                return None
+            if filename not in changed_files:
+                if len(changed_files) >= max_files:
+                    return None
+                changed_files.append(filename)
+            if status:
+                file_status[filename] = status
+            return filename
 
         for line in lines:
             if line.startswith("diff --git "):
                 is_binary = False
-                rename_from = None
+                current_new_lineno = None
                 current_file = None
-
-            elif line.startswith("rename from "):
-                rename_from = line[len("rename from "):].strip()
+                # The destination path lets us correctly retain deletion-only
+                # and rename-only diffs, which may not have a +++ header.
+                match = re.match(r'^diff --git (?:"?a/(?:[^" ]| [^b])*"?) (?:"?b/(.+?)"?)$', line)
+                if match:
+                    current_file = register_file(match.group(1))
 
             elif line.startswith("rename to "):
-                rename_to = line[len("rename to "):].strip()
-                if rename_to and not _is_unsafe_path(rename_to):
-                    file_status[rename_to] = "renamed"
+                current_file = register_file(line[len("rename to "):], "renamed")
 
             elif line.startswith("new file mode"):
                 if current_file:
-                    file_status.setdefault(current_file, "added")
+                    file_status[current_file] = "added"
 
             elif line.startswith("deleted file mode"):
                 if current_file:
@@ -158,6 +171,10 @@ class UnifiedDiffParser:
 
             elif line.startswith("Binary files"):
                 is_binary = True
+                # Binary files are intentionally reported separately, not reviewed.
+                if current_file:
+                    changed_files.remove(current_file) if current_file in changed_files else None
+                    file_status.pop(current_file, None)
                 # Binary files a/... and b/... differ
                 m = re.match(r"Binary files (.+) and (.+) differ", line)
                 if m:
@@ -165,20 +182,10 @@ class UnifiedDiffParser:
                     if bpath and not _is_unsafe_path(bpath):
                         binary_files.append(bpath)
 
-            elif line.startswith("--- "):
-                pass  # We use +++ to identify the destination file
-
             elif line.startswith("+++ "):
-                raw = line[4:].strip()
-                if raw and raw != "/dev/null":
-                    filename = _strip_git_prefix(raw)
-                    if not _is_unsafe_path(filename):
-                        if filename not in changed_files:
-                            if len(changed_files) >= max_files:
-                                # Record limitation but stop adding
-                                continue
-                            changed_files.append(filename)
-                        current_file = filename
+                filename = register_file(line[4:])
+                if filename:
+                    current_file = filename
 
             elif line.startswith("@@ "):
                 if not is_binary:
@@ -190,27 +197,23 @@ class UnifiedDiffParser:
                         new_count = int(new_count_str) if new_count_str else 1
                         end = new_start + max(0, new_count - 1)
                         file_hunk_ranges.setdefault(current_file, []).append((new_start, end))
+                        current_new_lineno = new_start
 
             elif line.startswith("+") and not line.startswith("+++"):
                 if not is_binary and current_file:
                     added_lines += 1
-                    # Track the line content for evidence extraction
-                    ranges = file_hunk_ranges.get(current_file, [])
-                    if ranges:
-                        last_start, last_end = ranges[-1]
-                        # Approximate line number by counting additions in this hunk
-                        existing = file_added_lines.get(current_file, [])
-                        lineno = last_start + sum(
-                            1 for ln, _ in existing
-                            if last_start <= ln <= last_end
-                        )
+                    if current_new_lineno is not None:
                         file_added_lines.setdefault(current_file, []).append(
-                            (lineno, line[1:])  # strip leading '+'
+                            (current_new_lineno, line[1:])
                         )
+                        current_new_lineno += 1
 
             elif line.startswith("-") and not line.startswith("---"):
                 if not is_binary:
                     removed_lines += 1
+
+            elif line.startswith(" ") and current_new_lineno is not None:
+                current_new_lineno += 1
 
         # Infer modification status for files not otherwise classified
         for f in changed_files:
