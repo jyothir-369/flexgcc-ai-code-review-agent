@@ -1,0 +1,28 @@
+{
+  "summary": "Reviewed 2 files with 13 additions and 5 deletions. Modified source code and updated tests.",
+  "overall_risk": "medium",
+  "findings": [
+    {
+      "category": "missing_test",
+      "severity": "medium",
+      "title": "No tests changed in this diff",
+      "description": "This diff modifies source files but does not include test updates.",
+      "file": "calculator.py",
+      "line_start": null,
+      "line_end": null,
+      "evidence": "Diff contains no test file changes",
+      "recommendation": "Add or update tests for changed behavior",
+      "confidence": 0.8,
+      "is_speculative": true
+    }
+  ],
+  "review_metadata": {
+    "input_type": "file",
+    "reviewed_file_count": 2,
+    "model_provider_mode": "demo",
+    "limitations": [
+      "Demo mode: deterministic rules only, no LLM reasoning",
+      "Not an automated proof of completeness"
+    ]
+  }
+}

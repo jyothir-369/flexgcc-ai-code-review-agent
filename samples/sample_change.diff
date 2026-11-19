@@ -1,0 +1,81 @@
+diff --git a/calculator.py b/calculator.py
+index abc1234..def5678 100644
+--- a/calculator.py
++++ b/calculator.py
+@@ -1,6 +1,7 @@
+ import math
+
+
+ class Calculator:
+     """A simple calculator with basic arithmetic operations."""
+
+     def add(self, a: float, b: float) -> float:
+         """Add two numbers together."""
+-        return a + b
++        if a < 0 or b < 0:
++            raise ValueError("Negative numbers not allowed")
+         return a + b
+
+     def subtract(self, a: float, b: float) -> float:
+         """Subtract b from a."""
+         return a - b
+
+     def multiply(self, a: float, b: float) -> float:
+         """Multiply two numbers."""
+         return a * b
+
+     def divide(self, a: float, b: float) -> float:
+         """Divide a by b."""
+-        return a / b
++        if b == 0:
++            raise ValueError("Division by zero not allowed")
+         return a / b
+
+     def square_root(self, x: float) -> float:
+-        return x ** 0.5
++        if x < 0:
++            raise ValueError("Cannot compute square root of negative number")
+         return x ** 0.5
+
+
+diff --git a/tests/test_calculator.py b/tests/test_calculator.py
+index abc1234..def5678 100644
+--- a/tests/test_calculator.py
++++ b/tests/test_calculator.py
+@@ -1,11 +1,16 @@
+ import pytest
+
+
+ class TestCalculator:
+     """Tests for the Calculator class."""
+
+     def test_add(self):
+         calculator = Calculator()
+         assert calculator.add(2, 3) == 5
+
+     def test_subtract(self):
+         calculator = Calculator()
+         assert calculator.subtract(5, 3) == 2
+
+     def test_multiply(self):
+         calculator = Calculator()
+         assert calculator.multiply(2, 3) == 6
+
+     def test_divide(self):
+         calculator = Calculator()
+-        with pytest.raises(ValueError):
++        # Division by zero should raise ValueError
++        with pytest.raises(ValueError):
+             calculator.divide(6, 0)
+
+     def test_square_root_positive(self):
+         calculator = Calculator()
+         assert calculator.square_root(4) == 2
+
+     def test_square_root_negative(self):
+         calculator = Calculator()
+-        with pytest.raises(ValueError):
++        with pytest.raises(ValueError) as exc:
+             calculator.square_root(-1)
++        # Check the error message contains expected text
++        assert "Cannot compute square root of negative number" in str(exc.value)
