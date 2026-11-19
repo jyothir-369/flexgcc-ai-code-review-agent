@@ -1,62 +1,49 @@
-"""Base provider interface and configuration."""
+"""Base provider interface for LLM integrations."""
+from __future__ import annotations
 
-import os
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
-
-
-@dataclass
-class ProviderConfig:
-    name: str
-    api_key_env: str
-    model_env: str
-    base_url_env: str = ""
+import abc
+from typing import Any, Dict, List, Optional
 
 
-class Provider:
-    def __init__(self, config: ProviderConfig):
-        self.config = config
+class LLMMessage:
+    def __init__(self, role: str, content: str) -> None:
+        self.role = role
+        self.content = content
 
-    def get_config(self) -> ProviderConfig:
-        return self.config
+    def to_dict(self) -> Dict[str, str]:
+        return {"role": self.role, "content": self.content}
 
-    def get_api_key(self) -> Optional[str]:
-        return os.getenv(self.config.api_key_env)
 
-    def get_model_name(self) -> str:
-        return os.getenv(self.config.model_env, "gpt-4o-mini")
+class LLMResponse:
+    def __init__(
+        self,
+        content: str = "",
+        finish_reason: str = "stop",
+        error: Optional[str] = None,
+    ) -> None:
+        self.content = content
+        self.finish_reason = finish_reason
+        self.error = error
 
-    def get_base_url(self) -> str:
-        return os.getenv(self.config.base_url_env, "")
+    @property
+    def is_error(self) -> bool:
+        return self.error is not None
 
+
+class BaseProvider(abc.ABC):
+    """Abstract base for all LLM providers."""
+
+    @abc.abstractmethod
     def is_configured(self) -> bool:
-        return bool(self.get_api_key())
+        """Return True if the provider has credentials available."""
+        ...
 
-    def request(self, payload: Any) -> Any:
-        """Make API request to provider endpoint."""
-        raise NotImplementedError("Subclasses must implement request method")
-
-
-class BaseProvider(Provider):
-    """Base class for all providers."""
-    pass
-
-
-class OpenAIProvider(BaseProvider):
-    """OpenAI-compatible provider implementation."""
-
-    def __init__(self, config: ProviderConfig):
-        super().__init__(config)
-        self.api_key = self.get_api_key()
-        self.model_name = self.get_model_name()
-        self.base_url = self.get_base_url()
-
-    def is_configured(self) -> bool:
-        return super().is_configured() and self.api_key is not None
-
-    def request(self, payload: Any) -> Any:
-        """Make API request to OpenAI-compatible endpoint."""
-        if not self.is_configured():
-            raise RuntimeError("Provider not configured - missing API key")
-        # Placeholder for actual API call
-        return {"status": "success", "data": payload}
+    @abc.abstractmethod
+    def complete(
+        self,
+        messages: List[LLMMessage],
+        max_tokens: int = 1000,
+        timeout: int = 30,
+    ) -> LLMResponse:
+        """Send a chat-completion request and return the response."""
+        ...

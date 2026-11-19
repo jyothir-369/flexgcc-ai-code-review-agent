@@ -1,6 +1,5 @@
-"""Providers for the AI review agent."""
-
-from .base import Provider, ProviderConfig
+"""LLM provider implementations."""
+from .base import BaseProvider, LLMMessage, LLMResponse
 from .openai_provider import OpenAIProvider
 
-__all__ = ["Provider", "ProviderConfig", "OpenAIProvider"]
+__all__ = ["BaseProvider", "LLMMessage", "LLMResponse", "OpenAIProvider"]

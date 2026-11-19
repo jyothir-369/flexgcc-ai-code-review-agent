@@ -1,27 +1,90 @@
-"""OpenAI provider implementation."""
+"""OpenAI-compatible provider using stdlib urllib (no third-party packages)."""
+from __future__ import annotations
 
-import os
 import json
-import time
+import os
+import socket
+import urllib.error
+import urllib.request
 from typing import Any, Dict, List, Optional
 
-import diff_review_agent.providers.base as base
+from diff_review_agent.providers.base import BaseProvider, LLMMessage, LLMResponse
+
+_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+_DEFAULT_MODEL = "gpt-4o-mini"
 
 
-class OpenAIProvider(base.OpenAIProvider):
-    """OpenAI provider implementation."""
+class OpenAIProvider(BaseProvider):
+    """OpenAI-compatible chat-completion provider.
 
-    def __init__(self, config: base.ProviderConfig):
-        super().__init__(config)
-        self.api_key = self.get_api_key()
-        self.model_name = self.get_model_name()
-        self.base_url = self.get_base_url()
+    Reads credentials from environment variables:
+      OPENAI_API_KEY   — required for LLM mode
+      OPENAI_MODEL     — optional, defaults to gpt-4o-mini
+      OPENAI_BASE_URL  — optional, defaults to https://api.openai.com/v1
+    """
+
+    def __init__(self) -> None:
+        self._api_key: Optional[str] = os.environ.get("OPENAI_API_KEY") or None
+        self._model: str = os.environ.get("OPENAI_MODEL") or _DEFAULT_MODEL
+        base = os.environ.get("OPENAI_BASE_URL") or _DEFAULT_BASE_URL
+        self._base_url: str = base.rstrip("/")
 
     def is_configured(self) -> bool:
-        return super().is_configured() and self.api_key is not None
+        return bool(self._api_key)
 
-    def request(self, payload: Any) -> Any:
-        """Make API request to OpenAI-compatible endpoint."""
+    def complete(
+        self,
+        messages: List[LLMMessage],
+        max_tokens: int = 1000,
+        timeout: int = 30,
+    ) -> LLMResponse:
         if not self.is_configured():
-            raise RuntimeError("Provider not configured - missing API key")
-        return {"status": "success", "data": payload}
+            return LLMResponse(error="Provider not configured: OPENAI_API_KEY is not set.")
+
+        payload = {
+            "model": self._model,
+            "messages": [m.to_dict() for m in messages],
+            "max_tokens": max_tokens,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        url = f"{self._base_url}/chat/completions"
+
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8")
+        except socket.timeout:
+            return LLMResponse(error=f"Request timed out after {timeout}s.")
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = exc.read().decode("utf-8")[:500]
+            except Exception:
+                detail = str(exc)
+            return LLMResponse(error=f"HTTP {exc.code}: {detail}")
+        except urllib.error.URLError as exc:
+            return LLMResponse(error=f"Network error: {exc.reason}")
+        except OSError as exc:
+            return LLMResponse(error=f"Connection error: {exc}")
+        except Exception as exc:  # catch-all: never let a connection error propagate
+            return LLMResponse(error=f"Unexpected error contacting provider: {type(exc).__name__}: {exc}")
+
+        try:
+            data: Dict[str, Any] = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return LLMResponse(error=f"Invalid JSON from provider: {exc}")
+
+        try:
+            content: str = data["choices"][0]["message"]["content"]
+            finish_reason: str = data["choices"][0].get("finish_reason", "stop")
+            return LLMResponse(content=content, finish_reason=finish_reason)
+        except (KeyError, IndexError, TypeError) as exc:
+            return LLMResponse(error=f"Unexpected response structure: {exc}. Raw: {raw[:200]}")
