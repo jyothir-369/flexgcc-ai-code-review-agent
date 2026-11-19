@@ -1,19 +1,32 @@
 {
-  "summary": "Reviewed 2 files with 13 additions and 5 deletions. Modified source code and updated tests.",
+  "summary": "Reviewed 2 file(s) with 11 addition(s) and 5 deletion(s). Found 2 finding(s).",
   "overall_risk": "medium",
   "findings": [
     {
       "category": "missing_test",
       "severity": "medium",
-      "title": "No tests changed in this diff",
-      "description": "This diff modifies source files but does not include test updates.",
+      "title": "No apparent test file for calculator.py",
+      "description": "A changed source file has no obvious corresponding test file based on naming conventions. This is a heuristic hint only — tests may exist under a different name or structure.",
       "file": "calculator.py",
       "line_start": null,
       "line_end": null,
-      "evidence": "Diff contains no test file changes",
-      "recommendation": "Add or update tests for changed behavior",
-      "confidence": 0.8,
+      "evidence": "Look for a test file such as: tests/test_calculator.py, tests/calculator_test.py, test_calculator.py, calculator_test.py. This is a naming-convention hint only; test absence is not confirmed.",
+      "recommendation": "Check whether tests exist and add or update them if the changed behavior is not already covered.",
+      "confidence": 0.5,
       "is_speculative": true
+    },
+    {
+      "category": "style",
+      "severity": "info",
+      "title": "Diff reviewed in demo/offline mode",
+      "description": "This review was produced by deterministic rules only. No LLM reasoning was applied. Results may miss subtle issues that require semantic understanding.",
+      "file": "calculator.py",
+      "line_start": null,
+      "line_end": null,
+      "evidence": "Demo mode active — no API key configured.",
+      "recommendation": "Re-run with --mode llm and a valid API key for AI-assisted review.",
+      "confidence": 1.0,
+      "is_speculative": false
     }
   ],
   "review_metadata": {
@@ -21,8 +34,7 @@
     "reviewed_file_count": 2,
     "model_provider_mode": "demo",
     "limitations": [
-      "Demo mode: deterministic rules only, no LLM reasoning",
-      "Not an automated proof of completeness"
+      "Demo mode: deterministic rules only, no LLM reasoning"
     ]
   }
 }
