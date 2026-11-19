@@ -1,20 +1,7 @@
 {
-  "summary": "Reviewed 2 file(s) with 11 addition(s) and 5 deletion(s). Found 2 finding(s).",
-  "overall_risk": "medium",
+  "summary": "Reviewed 2 file(s) with 11 addition(s) and 5 deletion(s). Found 1 finding(s).",
+  "overall_risk": "low",
   "findings": [
-    {
-      "category": "missing_test",
-      "severity": "medium",
-      "title": "No apparent test file for calculator.py",
-      "description": "A changed source file has no obvious corresponding test file based on naming conventions. This is a heuristic hint only — tests may exist under a different name or structure.",
-      "file": "calculator.py",
-      "line_start": null,
-      "line_end": null,
-      "evidence": "Look for a test file such as: tests/test_calculator.py, tests/calculator_test.py, test_calculator.py, calculator_test.py. This is a naming-convention hint only; test absence is not confirmed.",
-      "recommendation": "Check whether tests exist and add or update them if the changed behavior is not already covered.",
-      "confidence": 0.5,
-      "is_speculative": true
-    },
     {
       "category": "style",
       "severity": "info",

@@ -4,7 +4,7 @@ A small, safe AI code-review agent that reads a Git diff and produces structured
 
 ## What It Does
 
-- **Accepted input**: A diff/patch file (primary) or a local Git revision range (optional).
+- **Accepted input**: A diff/patch file (primary) or a local Git revision range (`--base` and `--head`).
 - **Review categories**: Bugs, risks, missing tests, and style issues.
 - **Output format**: JSON with a top-level object containing `summary`, `overall_risk`, `findings`, and `review_metadata`.
 - **Each finding** includes: `category`, `severity`, `title`, `description`, `file`, `line_start`, `line_end`, `evidence`, `recommendation`, `confidence`, and `is_speculative`.
@@ -14,7 +14,7 @@ A small, safe AI code-review agent that reads a Git diff and produces structured
 
 - **Language**: Python 3.11+ (single `python` interpreter; `python3` is not available on Windows).
 - **Framework**: Pydantic for schema validation; argparse for CLI.
-- **Model/provider**: OpenAI-compatible provider adapter (isolated from the agent). Configurable via environment variables (`OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`). Model name is not hardcoded.
+- **Model/provider**: Provider adapter isolated from the agent. `LLM_PROVIDER=openai` (default) uses an OpenAI-compatible chat API. `LLM_PROVIDER=gemini` uses Google's official Gemini `generateContent` API (`GEMINI_API_KEY` as `x-goog-api-key`). Model names are not hardcoded. Selecting Gemini never falls back to demo output.
 - **Orchestration**: A bounded workflow: receive validated diff summary and bounded changed-line evidence → plan review areas → call allowlisted read-only tools → observe results → synthesize findings → validate locally → retry at most once.
 - **Tools called** (all read-only and allowlisted):
   - `summarize_diff` — changed files, change counts, hunk summaries.
@@ -42,15 +42,31 @@ pip install -e ".[dev]"
 
 ## Environment Variables
 
-- `OPENAI_API_KEY` — API key for the LLM provider (leave unset for demo mode).
-- `OPENAI_MODEL` — Model identifier (default: `gpt-4o-mini`).
-- `OPENAI_BASE_URL` — Base URL for OpenAI-compatible endpoints (optional).
+- `LLM_PROVIDER` — `openai` (default) or `gemini`.
+- `OPENAI_API_KEY` — OpenAI key. Unset → demo fallback when OpenAI is selected.
+- `OPENAI_MODEL` — OpenAI model (default: `gpt-4o-mini`).
+- `OPENAI_BASE_URL` — OpenAI-compatible base URL (optional).
+- `GEMINI_API_KEY` — required for `LLM_PROVIDER=gemini`. Missing key is an error, not a demo run.
+- `GEMINI_MODEL` — Gemini model (default: `gemini-2.5-flash`).
+- `GEMINI_BASE_URL` — optional; default `https://generativelanguage.googleapis.com/v1beta`.
 
-## Demo Command
+## Commands
+
+Review a diff file in deterministic demo mode:
 
 ```bash
 python -m diff_review_agent --diff samples/sample_change.diff --mode demo --format json
 ```
+
+Review a local Git revision range instead of a patch file:
+
+```bash
+python -m diff_review_agent --base HEAD~1 --head HEAD --mode demo --format text
+```
+
+Use either `--diff` or both `--base` and `--head`. `--format json` is the default;
+`--format text` prints a concise human-readable summary. Provider or parse errors
+return structured output and a non-zero process exit code.
 
 ## Test Command
 
@@ -65,7 +81,7 @@ See `samples/expected_demo_output.json` for an example of the structured JSON ou
 ## Known Limitations
 
 - **Demo mode** is deterministic and does not use an LLM; findings are heuristic-based and may miss context-dependent issues.
-- **LLM mode** is implemented but not live-verified in this environment (no API key available).
+- **LLM mode** is implemented and covered by mocked tests. A live Gemini or OpenAI call has not been made in this environment (no API key). Demo output is never presented as a Gemini review.
 - **Local diff review only**: This is not a hosted pull-request integration.
 - **Test-file heuristics** are hints, not proof that tests are missing.
 - **Binary/unsupported files** are handled gracefully but not deeply analyzed.
