@@ -73,30 +73,30 @@
   - `CANDIDATE_RESPONSES.md` — all nine form fields and five answer prompts with explicit `[CANDIDATE INPUT REQUIRED]` markers
   - `README.md` — one-page document covering all four required assessment topics
   - `FINAL-VERIFICATION.md` — this file, updated with Phase 5 evidence
-- **Verification performed (2026-11-19)**:
-  - `python -m pytest tests/ -v` → `170 passed in 15.16s` — all tests pass, no regressions
-  - `python -m diff_review_agent --diff samples/sample_change.diff --mode demo --format json` → valid JSON, exit 0
-  - `python -m diff_review_agent --help` → exit 0, documents `--mode`
-  - `python -m diff_review_agent --mode demo --format json` (missing `--diff`) → non-zero exit
-  - Secrets audit: no `.env` file; `.env.example` contains placeholders; no API keys in source
-  - `samples/expected_demo_output.json` validated as JSON; matches actual CLI output on key fields
-  - README confirmed to cover all four required assessment topics (~72 lines)
-  - All untracked temp files inspected: no credentials, employer code, or private paths
-- **Evidence**:
-  - `python -m pytest tests/ -v` → `170 passed in 15.16s` (Python 3.13.14, pytest-8.4.2, win32)
-  - Demo command → `overall_risk: "medium"`, `model_provider_mode: "demo"`, `reviewed_file_count: 2`, exit 0
-  - `.gitignore` confirmed: `.env`, `.env.local`, `*.env` all excluded
+- **Final verification performed (this session)**:
+  - Isolated-environment test run: `python -m pytest -q` → `224 passed in 21.58s`.
+  - `python -m compileall -q src tests` → exit 0.
+  - `git diff --check` → exit 0; only LF-to-CRLF working-tree warnings were emitted, with no whitespace errors.
+  - Demo CLI JSON check: `python -m diff_review_agent --diff samples/sample_change.diff --mode demo --format json` → valid structured JSON, exit 0.
+  - Demo CLI text check: `python -m diff_review_agent --diff samples/sample_change.diff --mode demo --format text` → human-readable output, exit 0.
+  - Full `--mode llm` CLI through an OpenAI-compatible gateway → passed.
+  - Full `--mode llm` CLI through Gemini using `gemini-3.1-flash-lite` → passed.
+  - Secrets audit: no `.env` file; `.env.example` contains placeholders; no API keys are recorded in this report.
+  - `samples/expected_demo_output.json` is validated by the suite; README covers the required assessment topics.
+- **LLM verification scope and limitations**:
+  - The successful OpenAI-compatible gateway run verifies the compatible chat-completions integration, **not the official OpenAI API**. Official OpenAI API verification was not performed.
+  - Gemini verification was performed with `gemini-3.1-flash-lite`. Model availability is account/API-version dependent: availability errors were encountered while selecting Gemini models, so unavailable model identifiers must not be treated as provider defects.
+  - Live LLM output remains external-service dependent; credentials, account quota, endpoint policy, and model availability can change after this verification.
 - **Remaining blockers**:
   - **CANDIDATE INPUT REQUIRED**: All nine candidate information form fields (name, email, phone, location, LinkedIn, GitHub, experience, notice period, availability).
   - **CANDIDATE INPUT REQUIRED**: All five technical experience answers (personal project details, real failures, tech stack, guardrails, AI tools used).
-  - **LLM LIVE VERIFICATION**: `--mode llm` tested with mocks only; no real API key available. Not claimed as verified.
   - **SCREEN RECORDING**: Environment does not support capture. Live-demo script in PHASE-5-REPORT.md is the documented alternative.
 
 ---
 
 ## Overall Status
 
-**PARTIAL** — Implementation is complete and all automated evidence is clean. Submission is blocked on two classes of required input that only the candidate can supply: personal information (form fields) and first-person technical answers. No fabrication has been used in their place.
+**PARTIAL** — Automated verification is clean: 224/224 tests passed in an isolated environment; compileall and `git diff --check` passed; demo, OpenAI-compatible gateway, and Gemini `gemini-3.1-flash-lite` CLI paths passed. Submission remains blocked on candidate-owned personal information and first-person responses, plus the outstanding screen recording. Official OpenAI API verification was not performed. No fabrication has been used in their place.
 
 ---
 
@@ -104,15 +104,15 @@
 
 | Requirement | Status | Evidence |
 |-------------|--------|---------|
-| Agent accepts diff file, validates, produces JSON | PASS | 170 tests, CLI demo |
+| Agent accepts diff file, validates, produces JSON | PASS | 224/224 isolated-environment tests; demo and live-provider CLI checks |
 | Feedback: bugs, risks, missing tests, style | PASS | All four categories present |
 | Each finding: severity, evidence, confidence, speculative | PASS | Pydantic schema validated |
-| LLM mode configured via env vars | PASS | No hardcoded values |
+| LLM mode configured via env vars | PASS | OpenAI-compatible gateway and Gemini `gemini-3.1-flash-lite` CLI paths passed; official OpenAI API not verified |
 | Offline/demo mode, no credentials | PASS | Explicitly labeled demo |
 | Bounded diff size and file count | PASS | Enforced, tested |
 | Binary/malformed diffs handled | PASS | Tested |
 | No diff content executed | PASS | Tested (os.makedirs not run) |
-| 170+ unit tests | PASS | 170 passed 2026-11-19 |
+| Automated tests | PASS | 224/224 passed in isolated environment |
 | Sample diff included | PASS | `samples/sample_change.diff` |
 | Sample output included | PASS | `samples/expected_demo_output.json` |
 | One-page README, all four topics | PASS | `README.md` |
@@ -172,9 +172,9 @@ The following cannot be completed without the candidate's direct input:
 
 ## Known Limitations
 
-1. **No live LLM call** — LLM mode is fully implemented and tested with mocks; no real API call was made (no key available). This is not claimed as live-verified.
-2. **Demo mode only** — All demo evidence uses deterministic heuristics; no model reasoning applied.
-3. **Local diff only** — Not a hosted PR integration; requires a local `.diff` file or git revision range.
-4. **Test hints are heuristic** — `inspect_test_coverage_hints` uses naming conventions only; test absence is never confirmed.
-5. **Single provider** — Only OpenAI-compatible API; no Anthropic, Ollama, or local model.
+1. **Official OpenAI API not verified** — A full CLI run succeeded through an OpenAI-compatible gateway, but no official OpenAI API call was performed. Gateway behavior must not be represented as official-API verification.
+2. **Gemini availability is model/account dependent** — A full CLI run succeeded with `gemini-3.1-flash-lite`. Model availability errors were encountered for other Gemini model selections; these are external availability outcomes, not proof that the provider integration is broken.
+3. **Demo mode is deterministic** — Demo evidence uses deterministic heuristics rather than model reasoning.
+4. **Local diff only** — Not a hosted PR integration; requires a local `.diff` file or git revision range.
+5. **Test hints are heuristic** — `inspect_test_coverage_hints` uses naming conventions only; test absence is never confirmed.
 6. **No screen recording** — Environment cannot capture; live-demo script in PHASE-5-REPORT.md is the substitute.
