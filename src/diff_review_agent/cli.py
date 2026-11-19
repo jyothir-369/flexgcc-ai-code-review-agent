@@ -39,7 +39,7 @@ def handle_diff_path(diff_arg: str) -> GitDiffInput:
             f"Diff file not found or not a regular file: {diff_arg}",
             os.path.abspath(diff_arg),
         )
-    return GitDiffInput(type="file", path=diff_arg)
+    return GitDiffInput(input_type="file", path=diff_arg)
 
 
 def main():
