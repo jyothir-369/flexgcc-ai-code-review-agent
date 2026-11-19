@@ -28,7 +28,7 @@ def setup_logging():
 
 
 def load_config():
-    """Load config from .env (if present) and defaults."""
+    """Load runtime configuration from process environment and defaults."""
     return diff_review_agent.config.get_config()
 
 
@@ -46,7 +46,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Review a git diff and produce structured feedback."
     )
-    parser.add_argument("--diff", required=True, help="Path to a diff/patch file")
+    parser.add_argument("--diff", help="Path to a diff/patch file")
     parser.add_argument(
         "--mode", choices=["demo", "llm"], required=True,
         help="Run in demo (offline) or live LLM mode"
@@ -57,15 +57,31 @@ def main():
                         help="Output format (default: json)")
     args = parser.parse_args()
 
+    if args.diff and (args.base or args.head):
+        parser.error("Use either --diff or both --base and --head, not both.")
+    if not args.diff and not (args.base and args.head):
+        parser.error("Provide --diff or both --base and --head.")
+
     config = load_config()
-    diff_input = handle_diff_path(args.diff)
-
-    if args.mode == "demo":
-        result = review_diff(diff_input, config, mode="demo")
+    if args.diff:
+        diff_input = handle_diff_path(args.diff)
     else:
-        result = review_diff(diff_input, config, mode="llm")
+        diff_input = GitDiffInput(input_type="git_range", base=args.base, head=args.head)
 
-    print(result.model_dump_json(indent=2))
+    result = review_diff(diff_input, config, mode=args.mode)
+    if args.format == "text":
+        print(result.summary)
+        print(f"Risk: {result.overall_risk}")
+        for finding in result.findings:
+            location = finding.file or "(no file)"
+            if finding.line_start is not None:
+                location = f"{location}:{finding.line_start}"
+            print(f"- [{finding.severity.value}] {finding.title} ({location})")
+    else:
+        print(result.model_dump_json(indent=2))
+
+    if result.review_metadata.model_provider_mode == "error":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

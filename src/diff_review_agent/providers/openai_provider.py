@@ -24,9 +24,10 @@ class OpenAIProvider(BaseProvider):
     """
 
     def __init__(self) -> None:
-        self._api_key: Optional[str] = os.environ.get("OPENAI_API_KEY") or None
-        self._model: str = os.environ.get("OPENAI_MODEL") or _DEFAULT_MODEL
-        base = os.environ.get("OPENAI_BASE_URL") or _DEFAULT_BASE_URL
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        self._api_key: Optional[str] = api_key or None
+        self._model: str = os.environ.get("OPENAI_MODEL", "").strip() or _DEFAULT_MODEL
+        base = os.environ.get("OPENAI_BASE_URL", "").strip() or _DEFAULT_BASE_URL
         self._base_url: str = base.rstrip("/")
 
     def is_configured(self) -> bool:
@@ -69,6 +70,8 @@ class OpenAIProvider(BaseProvider):
                 detail = exc.read().decode("utf-8")[:500]
             except Exception:
                 detail = str(exc)
+            if self._api_key and self._api_key in detail:
+                detail = detail.replace(self._api_key, "[REDACTED]")
             return LLMResponse(error=f"HTTP {exc.code}: {detail}")
         except urllib.error.URLError as exc:
             return LLMResponse(error=f"Network error: {exc.reason}")
@@ -83,8 +86,13 @@ class OpenAIProvider(BaseProvider):
             return LLMResponse(error=f"Invalid JSON from provider: {exc}")
 
         try:
-            content: str = data["choices"][0]["message"]["content"]
+            content = data["choices"][0]["message"]["content"]
             finish_reason: str = data["choices"][0].get("finish_reason", "stop")
-            return LLMResponse(content=content, finish_reason=finish_reason)
         except (KeyError, IndexError, TypeError) as exc:
             return LLMResponse(error=f"Unexpected response structure: {exc}. Raw: {raw[:200]}")
+        if not isinstance(content, str):
+            return LLMResponse(
+                error="Unexpected response structure: choices[0].message.content is not text. "
+                f"Raw: {raw[:200]}"
+            )
+        return LLMResponse(content=content, finish_reason=finish_reason)
