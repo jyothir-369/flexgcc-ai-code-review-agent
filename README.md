@@ -1,88 +1,145 @@
 # FlexGCC AI Engineer Assessment: Diff Review Agent
 
-A small, safe AI code-review agent that reads a Git diff and produces structured JSON feedback.
+A Python-based AI code-review agent that analyzes Git diffs and returns structured feedback about potential bugs, risks, missing tests, and code-quality issues.
 
 ## What It Does
 
-- **Accepted input**: A diff/patch file (primary) or a local Git revision range (`--base` and `--head`).
-- **Review categories**: Bugs, risks, missing tests, and style issues.
-- **Output format**: JSON with a top-level object containing `summary`, `overall_risk`, `findings`, and `review_metadata`.
-- **Each finding** includes: `category`, `severity`, `title`, `description`, `file`, `line_start`, `line_end`, `evidence`, `recommendation`, `confidence`, and `is_speculative`.
-- **Two modes**: `--mode demo` (deterministic, no LLM) and `--mode llm` (uses a configured LLM provider).
+- Accepts a Git diff/patch file or a local Git revision range.
+- Reviews changes for potential bugs, risks, missing tests, and style issues.
+- Produces structured JSON or human-readable text output.
+- Supports deterministic offline demo mode and LLM-powered review mode.
+- Includes explicit error handling and structured review metadata.
 
 ## How It Was Built
 
-- **Language**: Python 3.11+ (single `python` interpreter; `python3` is not available on Windows).
-- **Framework**: Pydantic for schema validation; argparse for CLI.
-- **Model/provider**: Provider adapter isolated from the agent. `LLM_PROVIDER=openai` (default) uses an OpenAI-compatible chat API. `LLM_PROVIDER=gemini` uses Google's official Gemini `generateContent` API (`GEMINI_API_KEY` as `x-goog-api-key`). Model names are not hardcoded. Selecting Gemini never falls back to demo output.
-- **Orchestration**: A bounded workflow: receive validated diff summary and bounded changed-line evidence → plan review areas → call allowlisted read-only tools → observe results → synthesize findings → validate locally → retry at most once.
-- **Tools called** (all read-only and allowlisted):
-  - `summarize_diff` — changed files, change counts, hunk summaries.
-  - `inspect_test_coverage_hints` — hints about likely test files near changed source files.
-  - `detect_basic_patterns` — conservative checks for risky patterns in added lines.
-  - `get_changed_line_evidence` — bounded excerpts and line references.
+- **Language:** Python 3.11+
+- **CLI:** argparse
+- **Validation:** Pydantic
+- **Testing:** pytest
+- **LLM providers:** Google Gemini and OpenAI-compatible chat APIs.
+
+The review pipeline processes the diff, identifies changed files and relevant evidence, plans review areas, invokes allowlisted read-only analysis tools, synthesizes findings, validates the response, and returns structured output.
+
+### Analysis Tools
+
+- `summarize_diff`: Identifies changed files, additions, deletions, and diff hunks.
+- `inspect_test_coverage_hints`: Identifies likely related test files.
+- `detect_basic_patterns`: Checks added lines for selected risky patterns.
+- `get_changed_line_evidence`: Retrieves bounded evidence and line references.
+
+The agent does not execute submitted code or commands from the diff.
+
+## LLM Integration
+
+The application supports two provider configurations:
+
+- `LLM_PROVIDER=openai`: Uses an OpenAI-compatible chat API. Supports a configurable base URL.
+- `LLM_PROVIDER=gemini`: Uses Google's Gemini `generateContent` API.
+
+Provider integration is isolated from the core review workflow. LLM responses are validated before being returned. Transient provider failures receive bounded retries, while unrecoverable errors are reported explicitly.
+
+A live Gemini CLI review was successfully verified using `gemini-3.1-flash-lite`. The review processed two changed files and returned structured JSON with low overall risk and no identified findings.
+
+An OpenAI-compatible gateway was also successfully tested. A separate official OpenAI API attempt encountered an insufficient-credit error; this is an account quota limitation, not evidence of a successful official OpenAI API review.
 
 ## What Went Wrong and How It Was Handled
 
-The initial directory layout used a nested `src/diff_review_agent/src/diff_review_agent` structure, which broke imports. The fix was to flatten the package to `src/diff_review_agent/diff_review_agent/`. The diff parser initially returned empty results for valid diffs; this was fixed by extracting metadata from the diff content before computing summaries. The agent's `review_diff` function initially returned a result without checking for parse errors; this was fixed by wrapping the parse call in a try/except that returns an explicit error result.
-
-## What I Would Do Next
-
-- **PR integration**: Wire the agent into a real hosted pull-request workflow (not implemented here; this is a local diff review only).
-- **Repository context**: Add a repo-aware mode that inspects existing tests and project conventions.
-- **More test heuristics**: Expand `detect_basic_patterns` with language-aware checks for unsafe patterns.
-- **Evaluation dataset**: Build a small benchmark of diffs with expected findings to measure precision/recall.
-- **Audit logging**: Add structured logging for tool calls, retries, and provider failures.
+- **Package layout and imports:** An initially nested package structure caused import problems. The package layout was corrected.
+- **Diff parsing:** Valid diffs initially produced incomplete summaries. Diff metadata extraction was corrected.
+- **Parse failures:** Explicit error handling was added so parsing failures return structured errors instead of silently producing incomplete reviews.
+- **Provider reliability:** API errors, rate limits, malformed responses, and temporary service failures are handled through validation, bounded retries where applicable, and explicit error reporting.
+- **Test isolation:** Provider environment variables inherited by subprocess tests can affect tests that expect missing credentials. Tests must isolate provider configuration to verify fallback behavior reliably.
 
 ## Setup
 
+Python 3.11 or later is recommended.
+
 ```bash
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 ```
 
-## Environment Variables
+Create your local environment configuration using `.env.example` as a reference. Never commit API keys.
 
-- `LLM_PROVIDER` — `openai` (default) or `gemini`.
-- `OPENAI_API_KEY` — OpenAI key. Unset → demo fallback when OpenAI is selected.
-- `OPENAI_MODEL` — OpenAI model (default: `gpt-4o-mini`).
-- `OPENAI_BASE_URL` — OpenAI-compatible base URL (optional).
-- `GEMINI_API_KEY` — required for `LLM_PROVIDER=gemini`. Missing key is an error, not a demo run.
-- `GEMINI_MODEL` — Gemini model (default: `gemini-2.5-flash`).
-- `GEMINI_BASE_URL` — optional; default `https://generativelanguage.googleapis.com/v1beta`.
+### Gemini Configuration (PowerShell)
 
-## Commands
+```powershell
+$env:LLM_PROVIDER = "gemini"
+$env:GEMINI_MODEL = "gemini-3.1-flash-lite"
+$env:GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+$env:DIFF_REVIEW_AGENT_TIMEOUT_SECONDS = "90"
+```
 
-Review a diff file in deterministic demo mode:
+### Supported Environment Variables
+
+- `LLM_PROVIDER`: `openai` or `gemini`.
+- `OPENAI_API_KEY`: API key for the OpenAI-compatible provider.
+- `OPENAI_MODEL`: OpenAI-compatible model selection.
+- `OPENAI_BASE_URL`: Optional compatible API endpoint.
+- `GEMINI_API_KEY`: Required for Gemini.
+- `GEMINI_MODEL`: Gemini model selection.
+- `GEMINI_BASE_URL`: Optional Gemini API base URL.
+
+## Usage
+
+Run a deterministic offline review:
 
 ```bash
 python -m diff_review_agent --diff samples/sample_change.diff --mode demo --format json
 ```
 
-Review a local Git revision range instead of a patch file:
+Run an LLM-powered review:
+
+```bash
+python -m diff_review_agent --diff samples/sample_change.diff --mode llm --format json
+```
+
+Review a local Git revision range:
 
 ```bash
 python -m diff_review_agent --base HEAD~1 --head HEAD --mode demo --format text
 ```
 
-Use either `--diff` or both `--base` and `--head`. `--format json` is the default;
-`--format text` prints a concise human-readable summary. Provider or parse errors
-return structured output and a non-zero process exit code.
+The CLI supports `--format json` and `--format text`. Provider and parsing failures are reported explicitly with structured output and a non-zero exit code.
 
-## Test Command
+## Testing and Verification
+
+Run the automated test suite:
 
 ```bash
-pytest
+python -m pytest -q
 ```
 
-## Sample Output
+Run Python compilation checks:
 
-See `samples/expected_demo_output.json` for an example of the structured JSON output (demo mode).
+```bash
+python -m compileall -q src tests
+```
+
+Check Git whitespace errors:
+
+```bash
+git diff --check
+```
+
+The project has previously completed a 224-test run with provider credentials isolated from the test subprocesses. Live Gemini and OpenAI-compatible gateway CLI execution were also verified separately.
+
+## What I Would Do Next
+
+- Integrate with hosted GitHub pull-request workflows.
+- Add deeper repository context and language-aware analysis.
+- Expand the evaluation dataset and measure review precision and recall.
+- Improve audit logging for tool calls, retries, and provider failures.
 
 ## Known Limitations
 
-- **Demo mode** is deterministic and does not use an LLM; findings are heuristic-based and may miss context-dependent issues.
-- **LLM mode** is implemented and covered by mocked tests. A live Gemini or OpenAI call has not been made in this environment (no API key). Demo output is never presented as a Gemini review.
-- **Local diff review only**: This is not a hosted pull-request integration.
-- **Test-file heuristics** are hints, not proof that tests are missing.
-- **Binary/unsupported files** are handled gracefully but not deeply analyzed.
-- **No execution of diff content**: The agent never runs code or commands described by the diff.
+- Demo mode uses deterministic rules, not LLM reasoning.
+- LLM findings depend on model quality and the supplied diff context.
+- Test-coverage detection provides hints, not proof that tests are missing.
+- The agent reviews supplied changes rather than guaranteeing full repository correctness.
+- Binary and unsupported files receive limited analysis.
+- Live provider availability depends on API credentials, quotas, and service availability.
+- Hosted pull-request integration is not implemented.
+
+## Sample Output
+
+See `samples/expected_demo_output.json` for an example of deterministic structured JSON output.
